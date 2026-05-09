@@ -7,6 +7,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from log_parser import load_log
 
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+# TODO: matplotlib 그래프에서 한글 깨짐 문제 해결 필요
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -19,7 +23,7 @@ class MainWindow(QMainWindow):
 
         # 탭 구성
         self.tabs.addTab(self.create_log_viewer(), '로그 뷰어')
-        self.tabs.addTab(QWidget(), '통계')
+        self.tabs.addTab(self.create_stats(), '통계')
         self.tabs.addTab(QWidget(), '메시지 빈도')
 
     def create_log_viewer(self):
@@ -68,12 +72,60 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
         return widget
 
+    def create_stats(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+
+        self.stats_fig, self.stats_axes = plt.subplots(1, 2, figsize=(11, 6))
+        self.stats_canvas = FigureCanvas(self.stats_fig)
+
+        layout.addWidget(self.stats_canvas)
+        widget.setLayout(layout)
+        return widget
+    
+
+    def update_stats(self):
+        if self.df is None:
+            return
+
+        counts = self.df['level'].value_counts()
+        colors = {
+            'INFO': '#ADD8E6',
+            'WARNING': '#FFFFE0',
+            'ERROR': '#FFC6D0'
+        }
+        chart_colors = [colors.get(l, '#CCCCCC') for l in counts.index]
+
+        # 파이차트
+        self.stats_axes[0].clear()
+        self.stats_axes[0].pie(
+            counts.values,
+            labels=counts.index,
+            colors=chart_colors,
+            autopct='%1.1f%%',  # 소수점 밑 1자리까지 표시
+            startangle=90
+        )
+        self.stats_axes[0].set_title('레벨별 비율')
+
+        # 막대그래프
+        self.stats_axes[1].clear()
+        self.stats_axes[1].bar(counts.index, counts.values, color=chart_colors)
+        self.stats_axes[1].set_title('레벨별 건수')
+        self.stats_axes[1].set_xlabel('레벨')
+        self.stats_axes[1].set_ylabel('건수')
+
+        self.stats_fig.tight_layout()
+        self.stats_canvas.draw()
+
+
+
     def load_file(self):
         filepath, _ = QFileDialog.getOpenFileName(
             self, '로그 파일 열기', '', 'Log Files (*.log *.txt)')
         if filepath:
             self.df = load_log(filepath)
             self.update_table(self.df)
+            self.update_stats()
 
     def update_table(self, df):
         df = df.reset_index(drop=True)
