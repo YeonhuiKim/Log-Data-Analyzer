@@ -1,0 +1,114 @@
+import sys
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget,
+                              QTabWidget, QVBoxLayout, QHBoxLayout,
+                              QPushButton, QLineEdit, QTableWidget,
+                              QTableWidgetItem, QFileDialog, QLabel)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
+from log_parser import load_log
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Log Analyzer')
+        self.setFixedSize(1200, 800)
+        self.df = None  # 로그 데이터
+
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
+        # 탭 구성
+        self.tabs.addTab(self.create_log_viewer(), '로그 뷰어')
+        self.tabs.addTab(QWidget(), '통계')
+        self.tabs.addTab(QWidget(), '메시지 빈도')
+
+    def create_log_viewer(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+
+        # 파일 불러오기 버튼
+        self.load_btn = QPushButton('로그 파일 불러오기')
+        self.load_btn.setStyleSheet('font-size: 14px; padding: 8px;')
+        self.load_btn.clicked.connect(self.load_file)
+
+        # 필터 버튼
+        filter_layout = QHBoxLayout()
+        self.filter_btns = {}
+        for level in ['전체', 'INFO', 'WARNING', 'ERROR']:
+            btn = QPushButton(level)
+            btn.setStyleSheet('font-size: 13px; padding: 6px;')
+            btn.clicked.connect(lambda _, l=level: self.filter_table(l))
+            filter_layout.addWidget(btn)
+            self.filter_btns[level] = btn
+
+        # 검색창
+        search_layout = QHBoxLayout()
+        search_label = QLabel('검색:')
+        search_label.setStyleSheet('font-size: 13px;')
+        self.search_input = QLineEdit()
+        self.search_input.setStyleSheet('font-size: 13px; padding: 4px;')
+        self.search_input.setPlaceholderText('키워드 입력...')
+        self.search_input.textChanged.connect(self.search_table)
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input)
+
+        # 테이블
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(['시간', '레벨', '메시지'])
+        self.table.setColumnWidth(0, 200)
+        self.table.setColumnWidth(1, 100)
+        self.table.setColumnWidth(2, 850)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        layout.addWidget(self.load_btn)
+        layout.addLayout(filter_layout)
+        layout.addLayout(search_layout)
+        layout.addWidget(self.table)
+        widget.setLayout(layout)
+        return widget
+
+    def load_file(self):
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, '로그 파일 열기', '', 'Log Files (*.log *.txt)')
+        if filepath:
+            self.df = load_log(filepath)
+            self.update_table(self.df)
+
+    def update_table(self, df):
+        df = df.reset_index(drop=True)
+        self.table.setRowCount(len(df))
+        colors = {
+            'INFO': QColor(173, 216, 230),      # 연파랑
+            'WARNING': QColor(255, 255, 224),    # 연노랑
+            'ERROR': QColor(255, 198, 208)       # 연빨강
+        }
+        for i, row in df.iterrows():
+            items = [str(row['time']), row['level'], row['message']]
+            for j, text in enumerate(items):
+                item = QTableWidgetItem(text)
+                item.setBackground(colors.get(row['level'], QColor(255, 255, 255)))
+                self.table.setItem(i, j, item)
+
+    def filter_table(self, level):
+        if self.df is None:
+            return
+        if level == '전체':
+            self.update_table(self.df)
+        else:
+            self.update_table(self.df[self.df['level'] == level])
+
+    def search_table(self, keyword):
+        if self.df is None:
+            return
+        if keyword == '':
+            self.update_table(self.df)
+        else:
+            filtered = self.df[self.df['message'].str.contains(keyword, na=False)]
+            self.update_table(filtered)
+
+
+app = QApplication(sys.argv)
+window = MainWindow()
+window.show()
+sys.exit(app.exec_())
