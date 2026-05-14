@@ -1,4 +1,3 @@
-import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget,
                               QTabWidget, QVBoxLayout, QHBoxLayout,
                               QPushButton, QLineEdit, QTableWidget,
@@ -28,8 +27,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Log Analyzer')
         self.setFixedSize(1200, 800)
         self.df = None  # 로그 데이터
-
-        
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -205,9 +202,3 @@ class MainWindow(QMainWindow):
         else:
             filtered = self.df[self.df['message'].str.contains(keyword, na=False)]
             self.update_table(filtered)
-
-
-app = QApplication(sys.argv)
-window = MainWindow()
-window.show()
-sys.exit(app.exec_())
