@@ -9,7 +9,18 @@ from log_parser import load_log
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-# TODO: matplotlib 그래프에서 한글 깨짐 문제 해결 필요
+import matplotlib.font_manager as fm
+
+# 시스템에 설치된 폰트 중 한글 지원 폰트 찾기('나눔', '맑은' 포함 폰트)
+font_list = [f.name for f in fm.fontManager.ttflist]
+kor_fonts = [f for f in font_list if 'Nanum' in f or 'Malgun' in f]
+if kor_fonts:
+    plt.rcParams['font.family'] = kor_fonts[0]
+    print(f"사용 폰트: {kor_fonts[0]}")
+else:
+    print("한글 폰트를 찾을 수 없습니다.")
+# 한글 폰트 설정으로 인한 마이너스 기호 깨짐 방지
+plt.rcParams['axes.unicode_minus'] = False
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -18,13 +29,15 @@ class MainWindow(QMainWindow):
         self.setFixedSize(1200, 800)
         self.df = None  # 로그 데이터
 
+        
+
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
         # 탭 구성
         self.tabs.addTab(self.create_log_viewer(), '로그 뷰어')
         self.tabs.addTab(self.create_stats(), '통계')
-        self.tabs.addTab(QWidget(), '메시지 빈도')
+        self.tabs.addTab(self.create_freq(), '메시지 빈도')
 
     def create_log_viewer(self):
         widget = QWidget()
@@ -117,7 +130,40 @@ class MainWindow(QMainWindow):
         self.stats_fig.tight_layout()
         self.stats_canvas.draw()
 
+    def create_freq(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
 
+        self.freq_fig, self.freq_ax = plt.subplots(figsize=(11, 6))
+        self.freq_canvas = FigureCanvas(self.freq_fig)
+
+        layout.addWidget(self.freq_canvas)
+        widget.setLayout(layout)
+        return widget
+
+    def update_freq(self):
+        if self.df is None:
+            return
+
+        counts = self.df['message'].value_counts()
+        colors = []
+        for msg in counts.index:
+            # 해당 메시지의 레벨 확인
+            level = self.df[self.df['message'] == msg]['level'].iloc[0]
+            color_map = {
+                'INFO': '#ADD8E6',
+                'WARNING': '#FFFFE0',
+                'ERROR': '#FFC6D0'
+            }
+            colors.append(color_map.get(level, '#CCCCCC'))
+
+        self.freq_ax.clear()
+        self.freq_ax.barh(counts.index, counts.values, color=colors)
+        self.freq_ax.set_title('메시지 유형별 빈도')
+        self.freq_ax.set_xlabel('건수')
+
+        self.freq_fig.tight_layout()
+        self.freq_canvas.draw()
 
     def load_file(self):
         filepath, _ = QFileDialog.getOpenFileName(
@@ -126,7 +172,8 @@ class MainWindow(QMainWindow):
             self.df = load_log(filepath)
             self.update_table(self.df)
             self.update_stats()
-
+            self.update_freq()
+            
     def update_table(self, df):
         df = df.reset_index(drop=True)
         self.table.setRowCount(len(df))
